@@ -1,0 +1,1328 @@
+
+---
+title: "Idiosyncratic Risk-Adjusted Sales Growth Forecast: A Copula-Based Approach"
+
+abstract: "Abstract"
+author: "Ekaterina Smirnova"
+
+output: 
+  word_document:
+    pandoc_args: ["--lua-filter=multiple-bibliographies.lua","-Fpandoc-crossref"]
+    reference_docx: template.docx
+csl: 'style.csl'
+bibliography: ["packages.bib","literature.bib"]
+---
+
+```{r setup, include=FALSE, eval=T}
+
+rm(list=ls())
+setwd("D:/...")
+Sys.setenv(LANGUAGE='en')
+
+Packages <- c("knitr",
+              "dplyr",
+              "flextable",
+              "officer",
+              "readr",
+              "ggplot2",
+              "captioner",
+              'tibble',
+              "tidyverse",
+              "factoextra",
+              'RColorBrewer',
+              "VineCopula",
+              "officedown",
+              "data.table",
+              "fuzzyjoin",
+              "igraph",
+              "caret",
+              "VGAM",
+              "scales",
+              "shiny", 
+              "rvinecopulib",
+              "hablar",
+              "tmvnsim",
+              "CDVine",
+              "paleotree",
+              "sjmisc",
+              "janitor",
+              "knitcitations", 
+              "pastecs",
+              "zoo",
+              "ggpubr",
+              "ggplotify",
+              "reticulate",
+              "fitdistrplus",
+              "ggrepel",
+              "tidyr")
+invisible(lapply(Packages,library,character.only=TRUE))
+
+
+cleanbib()
+options("citation_format" = "pandoc")
+
+```
+
+```{r echo=FALSE, include=FALSE, results="hide"}
+## Dummy block to stop R check failing when it tries to tangle and source the vignette
+citep(citation("knitr"))
+citet("10.1098/rspb.2013.1372")
+```
+
+```{r global-options, include=FALSE}
+knitr::opts_chunk$set(fig.path='Figs/',
+                      echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE, eval=T}
+
+figure_nums <- captioner(prefix = "Picture", suffix=". ")
+
+figure_nums(name = "positions", caption = "Caption")
+
+figure_nums(name ="markets", caption="Markets")
+
+```
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE, eval=T}
+
+table_nums <- captioner(prefix = "Table",suffix=". ")
+
+table_nums(name="challenges", caption="Caption 1")
+
+table_nums(name="variables", caption="Caption 2")
+
+```
+
+\newpage
+
+# [Introduction]
+
+`r tufte::quote_footer('citation')`
+
+<br/><br/>
+
+R packages and sources citations *R* [@R-base]: *knitr* `r citep(citation("knitr"))`, *dplyr* `r citep(citation("dplyr"))`, *flextable* `r citep(citation("flextable"))`, *officer* `r citep(citation("officer"))`, *readr* `r citep(citation("readr"))`, *ggplot2* `r citep(citation("ggplot2"))`, *captioner* `r citep(citation("captioner"))`, *tibble* [@R-tibble], *tidyverse* `r citep(citation("tidyverse"))`, *factoextra* `r citep(citation("factoextra"))`, *RColorBrewer* `r citep(citation("RColorBrewer"))`, *VineCopula* `r citep(citation("VineCopula"))`, *officedown* `r citep(citation("officedown"))`, *data.table* `r citep(citation("data.table"))`, *fuzzyjoin* `r citep(citation("fuzzyjoin"))`, *igraph* `r citep(citation("igraph"))`, *tidyr* `r citep(citation("tidyr"))`, *caret* `r citep(citation("caret"))`, *VGAM* `r citep(citation("VGAM"))`, *scales* `r citep(citation("scales"))`, *shiny* `r citep(citation("shiny"))`, *rvinecopulib* `r citep(citation("rvinecopulib"))`, *hablar* `r citep(citation("hablar"))`, *tmvnsim* `r citep(citation("tmvnsim"))`, *paleotree* `r citep(citation("paleotree"))`, *sjmisc* [@R-sjmisc], *janitor* `r citep(citation("janitor"))`, *knitcitations* `r citep(citation("knitcitations"))`, *pastecs* `r citep(citation("pastecs"))`, *zoo* `r citep(citation("zoo"))`, *ggpubr* `r citep(citation("ggpubr"))`, *ggplotify* `r citep(citation("ggplotify"))`, *stringi* `r citep(citation("stringi"))`, *reticulate* `r citep(citation("reticulate"))`, *ggrepel* `r citep(citation("ggrepel"))`, *Pandoc* `r citep("https://pandoc.org/index.html")`.
+
+*Stack Overflow* `r citep("https://stackoverflow.com/questions")`, *Datanovia* `r citep("https://www.datanovia.com/en/")`, `r citet("10.1007/978-3-319-23796-1")`.
+
+
+*`r table_nums("challenges")`*
+
+```{r challenges, echo=FALSE, fig.cap=table_nums("challenges"), message=FALSE, warning=FALSE, eval=T}
+
+study1 <- c("Authors_1",
+            "Topic",
+            "Method")
+
+study2 <- c("Authors_2",
+            "Topic",
+            "Method")
+
+V <- cbind(study1,study2)
+V <- as.data.frame(t(V))
+colnames(V) <- c("Authors","Topic","Model")
+
+f <- flextable(V)
+
+f <- width(f, j = 1, width = 1.5)
+f <- width(f, j = 2, width = 2.5)
+f <- width(f, j = 3, width = 2.5)
+f <- flextable::font(f, fontname = "Times New Roman",part = "all")
+f <- flextable::fontsize(f, size=12,part = "all")
+f <- bold(f, bold = TRUE, part = "header")
+
+f
+
+ch_cap <- table_nums("challenges")
+
+```
+
+
+<br/><br/>
+
+## [Literature review]
+
+
+# Data
+
+
+```{r positions, message=FALSE, warning=FALSE, paged.print=TRUE,fig.cap = pos, out.width="80%", eval=T, echo=F}
+
+Survey <- read_delim("D:/....csv",delim=";",locale=locale(encoding = "UTF-8", decimal_mark = "."))
+
+names(Survey) <- Survey[1,]
+Survey <- Survey[-c(1,2),-9]
+
+
+l <- as.list(seq(1,8,1))
+
+Role <- do.call(cbind,lapply(l, function(x){
+  y <- ifelse(!is.na(Survey[,x]),names(Survey)[x],NA)
+  return(y)
+}))
+
+Role_check <- Role[apply(Role,1,function(x)any(!is.na(x))),]
+
+R <- melt(Role)
+R <- R[!is.na(R$value),]
+
+R <- within(R,
+            value <- factor(value,
+                            levels=names(sort(table(value),decreasing=F))))
+
+Rt <- as.data.frame(table(R$value))
+Rt$Freq <- as.numeric(Rt$Freq)
+
+names(Rt) <- c('role','share')
+
+p <- ggplot(Rt,aes(x=role,y=share,fill=role))+geom_bar(position="dodge", stat="identity")+ scale_fill_brewer(palette="Blues")+ theme(legend.position="none",panel.background = element_rect(fill = NA),panel.ontop =TRUE,panel.grid.major = element_blank())+coord_flip()
+
+p+labs(x="role",y="share")
+
+pos <- figure_nums("positions")
+
+
+```
+
+
+```{r markets, message=FALSE, warning=FALSE,fig.cap = mar, out.width="80%", eval=T, echo=F}
+
+Eve <- read_delim("D:/...csv",delim=";",locale=locale(encoding = "UTF-8", decimal_mark = "."))
+Eve <- Eve[-1,-c(1,3,4,105:108)]
+Eve <- t(Eve)
+colnames(Eve) <- Eve[1,]
+Eve <- Eve[-1,]
+G <- Eve[,11:17]
+
+l <- as.list(seq(1,7,1))
+
+Market <- do.call(cbind,lapply(l, function(x){
+  y <- ifelse(!is.na(G[,x]),names(G)[x],NA)
+  return(y)
+}))
+
+Market_check <- Market[apply(Market,1,function(x)any(!is.na(x))),]
+
+R <- melt(Market)
+R <- R[!is.na(R$value),]
+
+R <- within(R,
+            value <- factor(value,
+                            levels=names(sort(table(value),decreasing=F))))
+
+
+Rt <- as.data.frame(table(R$value))
+Rt$Freq <- as.numeric(Rt$Freq)
+names(Rt) <- c('market','quantity')
+
+p <- ggplot(Rt,aes(x=market,y=quantity,fill=market))+geom_bar(position="dodge", stat="identity")+ scale_fill_brewer(palette="Blues") + theme(legend.position="none",panel.background = element_rect(fill = NA),panel.ontop =TRUE,panel.grid.major = element_blank())+
+  coord_flip()
+p+labs(x="market",y="quantity")
+
+mar <- figure_nums("markets")
+
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE, eval=T, echo=F}
+
+Rus <- as.data.frame(Eve[,20:21])
+
+l <- list(1,2)
+
+Russia <- do.call(cbind,lapply(l, function(x){
+  y <- ifelse(!is.na(Rus[,x]),names(Rus)[x],NA)
+  return(y)
+}))
+
+Russia_check <- Russia[apply(Russia,1,function(x)any(!is.na(x))),]
+
+```
+
+
+```{r e-commerce, message=FALSE, warning=FALSE, fig.cap = ecom, out.width="80%", eval=T, echo=F}
+
+E <- as.data.frame(Eve[,23:26])
+
+E$noanswer <- ifelse(is.na(E[,1])&is.na(E[,2])&is.na(E[,3]),1,E$noanswer)
+
+l <- as.list(seq(1,4,1))
+
+Commerce <- do.call(cbind,lapply(l, function(x){
+  y <- ifelse(!is.na(E[,x]),names(E)[x],NA)
+  return(y)
+}))
+
+Commerce_check <- Commerce[apply(Commerce,1,function(x)any(!is.na(x))),]
+
+C <- melt(Commerce)
+C <- C[!is.na(C$value),]
+
+C <- within(C,
+            value <- factor(value,
+                            levels=names(sort(table(value),decreasing=F))))
+
+
+Rt <- as.data.frame(table(C$value))
+Rt$Freq <- as.numeric(Rt$Freq)
+names(Rt) <- c('ecommerce','quantity')
+
+p <- ggplot(Rt,aes(x=ecommerce,y=quantity,fill=ecommerce))+geom_bar(position="dodge", stat="identity")+ scale_fill_brewer(palette="Blues") + theme(legend.position="none",panel.background = element_rect(fill = NA),panel.ontop =TRUE,panel.grid.major = element_blank())+ scale_x_discrete(labels=c('no information', 'not active', 'plans to work', 'is currently working'))+
+  coord_flip()
+p+labs(x="",y="quantity")
+
+ecom <- figure_nums("e-commerce")
+
+```
+
+
+```{r rank, message=FALSE, warning=FALSE, fig.cap = rank, out.width="80%", eval=T, echo=F}
+
+E <- as.data.frame(Eve[,28:30])
+
+E$other <- ifelse(is.na(E[,1])&is.na(E[,2]),1,E$other)
+
+l <- list(1,2,3)
+
+Rank <- do.call(cbind,lapply(l, function(x){
+  y <- ifelse(!is.na(E[,x]),names(E)[x],NA)
+  return(y)
+}))
+
+Rank_check <- Rank[apply(Rank,1,function(x)any(!is.na(x))),]
+
+C <- melt(Rank)
+C <- C[!is.na(C$value),]
+
+C <- within(C,
+            value <- factor(value,
+                            levels=names(sort(table(value),decreasing=F))))
+
+
+Rt <- as.data.frame(table(C$value))
+Rt$Freq <- as.numeric(Rt$Freq)
+names(Rt) <- c('rank','quantity')
+
+p <- ggplot(Rt,aes(x=rank,y=quantity,fill=rank))+geom_bar(position="dodge", stat="identity",width=0.5)+ scale_fill_brewer(palette="Blues") + theme(legend.position="none",panel.background = element_rect(fill = NA),panel.ontop =TRUE,panel.grid.major = element_blank())+
+  coord_flip()
+p+labs(x="factor",y="quantity")
+
+rank <- figure_nums("rank")
+
+
+```
+
+
+### [Saple]
+
+
+```{r country, message=FALSE, warning=FALSE, out.width="80%", echo=F, include=F, eval=T, echo=F}
+
+Sales <- read_delim("D:...csv",delim=";",locale=locale(encoding = "UTF-8", decimal_mark = "."))
+
+colnames(Sales)[2] <- 'Company'
+colnames(Sales)[4] <- 'Website'
+colnames(Sales)[5] <- 'Main'
+colnames(Sales)[6] <- 'Special'
+
+Sales <- as.data.frame(Sales)
+
+Snew <- Sales[,-c(1,4)]
+
+Snew <- Snew[rowSums(is.na(Snew))!=28,]
+
+for (i in c(1:3,5:ncol(Snew))) {
+  while(length(ind <- which(is.na(Snew[,i]))) > 0){Snew[,i][ind] <- Snew[,i][ind -1]}
+}
+
+S <- Snew %>% distinct(Company,.keep_all = T)
+
+n <- as.list(paste(rep(seq(2020,2017,-1),each=4),rep(seq(4,1,-1),times=4),sep = "Q"))
+
+n[[1]] <- NULL
+n[[1]] <- NULL
+n[[13]] <- NULL
+n[[13]] <- NULL
+
+names(S)[5:16] <- paste(n,"Sales",sep = ".")
+names(S)[17:28] <- paste(n,"Assets",sep=".")
+
+S[,5:28] <- do.call(cbind,lapply(S[,5:28],function(x){
+  y <- gsub("n.a.",NA,x)
+  y <- as.data.frame(as.numeric(gsub(" ","",y)))
+  return(y)
+}))
+
+S <- as.data.frame(S)
+
+Sset <- S[!is.na(S[,6])&!is.na(S[,18]),] 
+
+Sset <- Sset[Sset[,18]<10000,] 
+
+Sset$Country <- as.factor(Sset$Country)
+p <- as.data.frame(table(Sset$Country))
+p$Freq <- as.numeric(p$Freq)
+p$Percentage <- 100*p$Freq/nrow(Sset)
+colnames(p)[1] <- 'country'
+p <- p[order(-p$Percentage),]
+p <- as_tibble(p)
+p <- p %>% column_to_rownames(var='country')
+phor <- as.data.frame(t(p))
+
+l <- list(1,2)
+
+phor$other <- do.call(rbind,lapply(l,function(x) {
+  a <- sum(p[,x][9:nrow(p)])
+  return(a)
+}))
+
+p <- as.data.frame(t(phor))
+pnew <- p[c(1:8,nrow(p)),]
+
+setDT(pnew, keep.rownames = TRUE)[]
+
+names(pnew)[1] <- "country"
+
+```
+
+
+```{r,fig.cap=cntr, eval=T}
+
+p <- pnew %>% arrange(Percentage)
+ggplot(data=pnew, aes(x=reorder(countryrus, Percentage), y=Percentage, fill=factor(countryrus)))+
+       coord_flip()+
+       geom_bar(position="dodge",stat="identity")+
+       scale_fill_brewer(palette="Blues")+
+       theme(legend.position="none",panel.background = element_rect(fill = NA),panel.ontop =TRUE,panel.grid.major = element_blank())+
+  labs(y="доля, %",x="Place")
+
+cntr <- figure_nums("country")
+
+```
+
+
+```{r, message=FALSE, warning=FALSE, echo=F, include=F, eval=T}
+
+Industry <- subset(Snew, Company %in% Sset$Company)
+
+Industry$Special <- ifelse(!is.na(Industry$Special),Industry$Special,"no data")
+
+Industry$Special <- as.factor(Industry$Special)
+
+p <- as.data.frame(table(Industry$Special))
+p$Freq <- as.numeric(p$Freq)
+p$Percentage <- 100*p$Freq/nrow(Industry)
+colnames(p)[1] <- 'industry'
+p <- p[order(-p$Percentage),]
+p <- as_tibble(p)
+p <- p %>% column_to_rownames(var='industry')
+phor <- as.data.frame(t(p))
+
+l <- list(1,2)
+
+phor$other <- do.call(rbind,lapply(l,function(x) {
+  a <- sum(p[,x][9:nrow(p)])
+  return(a)
+}))
+
+p <- as.data.frame(t(phor))
+pnew <- p[c(1:8,nrow(p)),]
+
+setDT(pnew, keep.rownames = TRUE)[]
+
+names(pnew)[1] <- "industry"
+
+```
+
+
+```{r, fig.cap=indstr,out.width = "120%", eval=T}
+
+p <- pnew %>% arrange(Percentage)
+ggplot(data=pnew, aes(x=reorder(industryname, Percentage), y=Percentage, fill=factor(industryname)))+
+       coord_flip()+
+       geom_bar(position="dodge",stat="identity")+
+       scale_fill_brewer(palette="Blues")+
+       theme(legend.position="none",panel.background = element_rect(fill = NA),panel.ontop =TRUE,panel.grid.major = element_blank())+
+  labs(y="share, %",x="industry")
+
+indstr <- figure_nums("industry")
+
+
+```
+
+
+### [Data prepocessing]
+
+```{r number, echo = F,results='hide',message=FALSE,out.width = "70%",fig.cap = num, eval=T}
+
+l <- as.list(seq(5,15,1))
+
+M <- do.call(cbind,lapply(l,function(x){
+  y <- as.data.frame(Sset[,x]-Sset[,x+1])
+  names(y) <- paste0(names(Sset[x]),"Growth")
+  return(y)
+}))
+
+S <- cbind(Sset,M)
+
+fviz_nbclust(S[,c(6,18)], kmeans, method = "silhouette")+xlab("number of clusters")+
+  ylab("average silhouette width")+labs(title="")
+
+num <- figure_nums("number")
+
+```
+
+
+```{r cluster, echo=F, message=FALSE, warning=FALSE, out.width="70%", results='hide',fig.cap = clus, eval=T}
+
+k <- eclust(S[,c(6,18)],"kmeans",k=2,graph=F)
+
+for (i in 1:length(k$cluster)){
+  k$cluster[[i]] <- ifelse(k$cluster[[i]]==1,3,k$cluster[[i]])
+}
+
+for (i in 1:length(k$cluster)){
+  k$cluster[[i]] <- k$cluster[[i]]-1
+}
+
+fviz_cluster(k,labelsize = 0,legend.title="cluster number")+theme(panel.background = element_rect(fill = "white", colour = "grey50"))+xlab("revenue")+ylab("assets")+scale_colour_manual(values = rev(brewer.pal(2,"Blues")))+scale_fill_brewer(palette="Blues")+labs(title="")
+
+clus <- figure_nums("cluster")
+
+
+```
+
+
+$$Distance=\left\lvert\frac{Sales_{1i,t_{j}}}{Assets_{1i,t_{j}}}-\frac{Sales_{2j,t_{k}}}{Assets_{2j,t_{k}}}\right\rvert\leqslant5\%\frac{Sales_{1i,t_{j}}}{Assets_{1i,t_{j}}},$$ {#eq:eqn1}
+
+(`r figure_nums("net", display = "cite")`).
+
+```{r, eval=T}
+
+S$Cluster <- k$cluster
+
+S <- move_columns(S,Cluster,.after=Special)
+
+Sbase <- S[,-c(17,29)]
+
+n[[11]] <- NULL
+
+Data <- Sbase[,6:38]
+Data <- Data[,order(names(Data),decreasing = F)]
+Sbase1 <- cbind(Sbase[,1:5],Data)
+
+# Create companies' label data
+
+a1 <- letters
+a2 <- LETTERS
+a3 <- intToUtf8(as.character(161:255), multiple=TRUE)[c(7,21,22,55,56)]
+
+Sbase1$Label <- c(a1,a2,a3)
+
+Sdata <- Sbase1 %>%
+  gather(names(Sbase1[,endsWith(colnames(Sbase1), ".Sales")|endsWith(colnames(Sbase1), ".Assets")|endsWith(colnames(Sbase1), ".SalesGrowth")]), key = "variable", value = "value")
+
+Sdata <- Sdata %>% separate(variable, c("quarter","indicator"))
+
+Slong <- long_panel(Sbase1, suffix=".", prefix=NULL, id="Company", begin="2017Q4", end="2020Q2", label_location="beginning", periods = c("2017Q4","2018Q1","2018Q2","2018Q3","2018Q4","2019Q1","2019Q2","2019Q3","2019Q4","2020Q1","2020Q2"))
+
+names(Slong)[2] <- 'Quarter'
+
+Slong$Share <- Slong$Sales/Slong$Assets
+
+```
+
+
+```{r, eval=T}
+
+# Data frame creation
+n <- n %>% paleotree::reverseList()
+n <- n[[1]]
+
+r <- lapply(n,function(x) {
+  y <- Slong[Slong$Quarter<x,]
+  y <- y[!is.na(y$Share)&!is.na(y$SalesGrowth),]
+  y1 <- y[y$Cluster==1,]
+  y2 <- y[y$Cluster==2,]
+  z <- difference_full_join(y1,y2,by="Share",max_dist=5*y1$Share/100,distance_col="Distance")
+  u <- z[!is.na(z$SalesGrowth.x)&!is.na(z$SalesGrowth.y),]
+  u$Quarter <- x
+  setnames(u,"Company.y","Company")
+  return(u)
+})
+
+t <- r %>% reduce(rbind)
+r <- left_join(t,Slong,by=c("Company","Quarter"))
+
+r <- r[order(r$Quarter,decreasing = F),]
+
+r <- unique(setDT(r), 
+       by = c('Company.x', 'Quarter.x', 'Company', 'Quarter.y'))
+
+U <- r %>% ungroup() %>% dplyr::select('SalesGrowth.x', 'SalesGrowth.y', 'SalesGrowth', 'Quarter','Quarter.x','Quarter.y')
+U <- U[!is.na(U$SalesGrowth),]
+
+
+
+```
+
+
+
+```{r}
+
+Net <- r %>% ungroup() %>% dplyr::select('Company.x', 'Company', 'Quarter.x', 'Quarter.y', 'Distance')
+setnames(Net,"Company","Company.y")
+
+Net$from <- paste(Net$Company.x,Net$Quarter.x)
+Net$to <- paste(Net$Company.y,Net$Quarter.y)
+
+Edges <- Net %>% ungroup() %>% dplyr::select(from, to, Distance)
+
+Edges <- Edges[Edges$from!="NA NA",]
+
+Names <- Slong %>% dplyr::select(Company, Cluster, Quarter, Share, Label)
+
+Names <- Names[!is.na(Names$Share),]
+
+Names$id <- paste(Names$Company,Names$Quarter)
+
+Vertices <- Names %>% ungroup() %>% dplyr::select(id, Cluster, Share, Label, Company)
+
+```
+
+
+```{r network, echo=F, message=FALSE, warning=FALSE, fig.width = 25.2, fig.height = 18, results='hide', fig.cap = network_graph, eval=T}
+
+set.seed(2)
+
+#Check
+
+net <- graph_from_data_frame(d=Edges, vertices=Vertices, directed=T)
+
+# Generate colors based on cluster:
+colrs <- c(adjustcolor("red", alpha=0.5), adjustcolor("lightblue3", alpha=0.5))
+V(net)$color <- colrs[V(net)$Cluster]
+
+V(net)$size <- V(net)$Share*9
+
+V(net)$label.color <- "black"
+
+# Set edge width based on Distance:
+E(net)$width <- E(net)$Distance
+
+#change arrow size and edge color:
+E(net)$arrow.size <- .2
+E(net)$color <- adjustcolor("grey20", alpha=0.5)
+
+V(net)$label <- V(net)$Label
+
+# We can even set the network layout:
+plot(net, vertex.label=ifelse(V(net)$Share>1.5,V(net)$label,NA),vertex.label.cex=2, edge.arrow.size=0,bty='T') 
+
+op <- par(cex = 2,mar=c(9,8,0,2),xpd=TRUE)
+
+legend(x=-1.9, y=-1, c("Cluster 1","Cluster 2"), pch=21, col="#777777", pt.bg=colrs, pt.cex=1.5, bty="n", ncol=1, title = expression(bold("Notation:")), text.font=3)
+
+legend(x=-1.5, y=-1, unique(V(net)$Company[V(net)$Share>1.5]), pch=c(unique(V(net)$label[V(net)$Share>1.5])), col="grey20", pt.cex=1.4, bty="n", ncol=3, title = expression(bold("coefficient")), text.font=3, text.width = 1.2)
+
+network_graph <- figure_nums("net")
+
+```
+
+
+
+```{r gr, echo=F, message=FALSE, warning=FALSE, fig.width = 7, fig.height = 5, results='hide',fig.cap = growth, eval=T}
+
+Slong$Cluster <- as.factor(Slong$Cluster)
+
+ggplot(Slong, aes(x=Quarter, y=SalesGrowth, color = Cluster))+geom_point(size=2, alpha=0.5)+scale_color_brewer(palette="Set1")+
+  labs(y=paste0("sales growth","\U20AC"),x="quarter",colour = "cluster")+ theme_classic()+
+  geom_hline(yintercept=0)+
+  theme(axis.text = element_text(size = 8))
+
+growth <- figure_nums("SalesGrowth")
+
+```
+
+```{r distr, echo=F, message=FALSE, warning=FALSE, fig.width = 7, fig.height = 5, results='hide',fig.cap = distribution_sales, eval=T}
+
+S1 <- r[!is.na(r$SalesGrowth.x)&!is.na(r$SalesGrowth.y)&!is.na(r$Distance),]
+
+
+ggplot(S1, aes(x=S1$SalesGrowth.x, y=S1$SalesGrowth.y,size=80*S1$Distance)) +
+  geom_point(alpha=0.3, color="darkslateblue",pch=1)+
+  labs(x="sales growth cluster 1, млн \U20AC", y="sales growth cluster 2, млн \U20AC", caption=expression(paste(Delta, "difference")), size=expression(80%*%Delta))+
+  geom_hline(yintercept=0)+
+  theme(plot.caption=element_text(size=9, hjust=0, margin=margin(t=30)), axis.title=element_text(size=10,face = "bold"),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"), legend.background = element_blank(),legend.key = element_rect(colour = "transparent", fill = "white"))
+
+
+distribution_sales <- figure_nums("distribution")
+
+
+```
+
+
+*`r table_nums("variables")`*
+
+```{r vars, fig.cap = var_cap}
+
+variable1 <- c("SalesGrowth.x",
+            "cluster 1 sales growth")
+
+variable2 <- c("SalesGrowth.y",
+            "cluster 2 sales growth")
+
+V <- cbind(variable1,variable2,variable3)
+V <- as.data.frame(t(V))
+colnames(V) <- c("Label","Description")
+
+B <- stat.desc(U[,1:3], basic=F, desc=F)
+B <- round(B,digits=1)
+B <- format(B,nsmall = 1,big.mark = " ")
+B <- as.data.frame(t(B))
+B <- setDT(B, keep.rownames = T)[]
+setnames(B,"rn","Обозначение")
+B <- B[,c(1,5:7)]
+names(B) <- c('Label','Median','Mean','Standard deviation')
+
+W <- cbind(V, B[,-1])
+
+f <- flextable(W)
+
+f <- width(f, j = 1, width = 1.2)
+f <- width(f, j = 2, width = 2.5)
+f <- width(f, j = 3, width = 1)
+f <- width(f, j = 4, width = 0.9)
+f <- flextable::font(f, fontname = "Times New Roman",part = "all")
+f <- flextable::fontsize(f, size=11,part = "all")
+f <- bold(f, bold = TRUE, part = "header")
+f <- italic(f, part = "body",j=1, italic=T)
+f <- flextable::compose(f, part="header",j="Standard deviation",value=as_paragraph("\u03C3"))
+
+f
+
+var_cap <- table_nums("variables")
+
+```
+
+
+```{r}
+
+U <- U %>% convert(num())
+
+Test <- U[U$Quarter>"2019Q4",]
+Train <- U[U$Quarter<="2019Q4",]
+
+Test <- Test[,1:3]
+Train <- Train[,1:3]
+
+```
+
+```{r}
+
+use_python("D:\\Programs\\anaconda3\\python.exe")
+matplotlib <- import("matplotlib")
+matplotlib$use("Agg", force = TRUE)
+
+```
+
+```{python}
+
+Train = r.Train
+Test = r.Test
+
+```
+
+
+
+```{python, include=F}
+
+import numpy as np
+import matplotlib as mpl
+from matplotlib import pyplot as plt
+from matplotlib import cm
+from sklearn.preprocessing import QuantileTransformer
+from sklearn.preprocessing import minmax_scale
+
+X=Train[['SalesGrowth.x','SalesGrowth.y']]
+X=X.values
+y_full = Train.loc[:,'SalesGrowth']
+y_full = y_full.values
+X_test=Test[['SalesGrowth.x','SalesGrowth.y']]
+X_test=X_test.values
+y_test = Test.loc[:,'SalesGrowth']
+y_test = y_test.values
+
+
+distributions = [('original data', X, X_test), ('quantile transformed data (uniform distribution)', QuantileTransformer(output_distribution='uniform').fit_transform(X), QuantileTransformer(output_distribution='uniform').fit_transform(X_test)),]
+
+
+y = minmax_scale(y_full)
+y_2 = minmax_scale(y_test)
+
+cmap = getattr(cm, 'blues_r', cm.seismic_r)
+
+def create_axes(title, figsize=(11.43, 4.29)):
+    fig = plt.figure(figsize=figsize)
+    fig.suptitle(title)
+
+    # define the axis for the first plot
+    left, width = 0.1, 0.23
+    bottom, height = 0.1, 0.7
+    bottom_h = height + 0.15
+    left_h = left + width + 0.02
+
+    rect_scatter = [left, bottom, width, height]
+    rect_histx = [left, bottom_h, width, 0.1]
+    rect_histy = [left_h, bottom, 0.05, height]
+
+    ax_scatter = plt.axes(rect_scatter)
+    ax_histx = plt.axes(rect_histx)
+    ax_histy = plt.axes(rect_histy)
+    
+    # define the axis for the second plot
+    left = width + left + 0.25
+    left_h = left + width + 0.02
+
+    rect_scatter = [left, bottom, width, height]
+    rect_histx = [left, bottom_h, width, 0.1]
+    rect_histy = [left_h, bottom, 0.05, height]
+
+    ax_scatter_zoom = plt.axes(rect_scatter)
+    ax_histx_zoom = plt.axes(rect_histx)
+    ax_histy_zoom = plt.axes(rect_histy)
+    
+    # define the axis for the Train colorbar
+    left_train, width_train = left - 0.18, 0.01
+
+    rect_colorbar_train = [left_train, bottom, width_train, height]
+    ax_colorbar_train = plt.axes(rect_colorbar_train)
+    
+    # define the axis for the Test colorbar
+    left_test, width = width + left + 0.07, 0.01
+
+    rect_colorbar_test = [left_test, bottom, width, height]
+    ax_colorbar_test = plt.axes(rect_colorbar_test)
+
+    return ((ax_scatter, ax_histy, ax_histx),
+            (ax_scatter_zoom, ax_histy_zoom, ax_histx_zoom),
+            ax_colorbar_train, ax_colorbar_test)
+            
+            
+def plot_distribution(axes, X, y, hist_nbins=50, title="",
+                      x0_label="", x1_label=""):
+    ax, hist_X1, hist_X0 = axes
+
+    ax.set_title(title)
+    ax.set_xlabel(x0_label)
+    ax.set_ylabel(x1_label)
+
+    colors = cmap(y)
+    ax.scatter(X[:, 0], X[:, 1], alpha=0.5, marker='o', s=9, lw=0, c=colors)
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.get_xaxis().tick_bottom()
+    ax.get_yaxis().tick_left()
+    ax.spines['left'].set_position(('outward', 20))
+    ax.spines['bottom'].set_position(('outward', 0))
+    
+    hist_X1.set_ylim(ax.get_ylim())
+    hist_X1.hist(X[:, 1], bins=hist_nbins, orientation='horizontal',
+                 color='grey', ec='grey')
+    hist_X1.axis('off')
+
+    hist_X0.set_xlim(ax.get_xlim())
+    hist_X0.hist(X[:, 0], bins=hist_nbins, orientation='vertical',
+                 color='grey', ec='grey')
+    hist_X0.axis('off')
+       
+    
+    
+def make_plot(item_idx):
+    title, X, X_test = distributions[item_idx]
+    ax_zoom_train, ax_zoom_test, ax_colorbar_train, ax_colorbar_test = create_axes(title)
+    axarr = (ax_zoom_train, ax_zoom_test)
+    plot_distribution(ax_zoom_train, X, y, hist_nbins=200,
+                      x0_label="SalesGrowth.x",
+                      x1_label="SalesGrowth.y",
+                      title="Train set")
+    
+    plot_distribution(ax_zoom_test, X_test, y_2, hist_nbins=200,
+                      x0_label="SalesGrowth.x",
+                      x1_label="SalesGrowth.y",
+                      title="Test set")
+
+    norm = mpl.colors.Normalize(y_full.min(), y_full.max())
+    mpl.colorbar.ColorbarBase(ax_colorbar_train, cmap=cmap,
+                              norm=norm, orientation='vertical',
+                              label='SalesGrowth')
+    
+    norm = mpl.colors.Normalize(y_test.min(), y_test.max())
+    mpl.colorbar.ColorbarBase(ax_colorbar_test, cmap=cmap,
+                              norm=norm, orientation='vertical',
+                              label='SalesGrowth')
+
+
+```
+
+
+```{python, fig.width = 14, fig.height = 10}
+
+make_plot(0)
+plt.show()
+
+```
+*`r figure_nums("original")`*
+
+<br/><br/>
+
+```{python, fig.width = 14, fig.height = 10}
+
+make_plot(1)
+plt.show()
+
+```
+*`r figure_nums("transformed")`*
+
+<br/><br/>
+
+```{r}
+
+a <- import("sklearn.preprocessing", convert=F)
+
+set.seed(2)
+
+Train_set <- Train
+Test_set <- Test
+
+Train_set <- a$QuantileTransformer(output_distribution='uniform', n_quantiles=nrow(Train_set))$fit_transform(Train_set)
+Test_set <- a$QuantileTransformer(output_distribution='uniform', n_quantiles=nrow(Test_set))$fit_transform(Test_set)
+
+Test_set <- as.matrix(Test_set)
+Test_set <- as.data.frame(Test_set)
+names(Test_set) <- names(Test)
+
+Train_set <- as.matrix(Train_set)
+Train_set <- as.data.frame(Train_set)
+names(Train_set) <- names(Train)
+
+Train <- as.data.frame(Train)
+Test <- as.data.frame(Test)
+
+```
+
+```{r}
+
+Train <- do.call(cbind, lapply(Train, function(x) {
+  x <- as.numeric(x)
+}))
+
+
+```
+
+
+## [Model]
+
+```{r}
+
+M <- do.call(cbind, lapply(U[,4:6], function(x) {
+  y <- as.yearqtr(x)
+  y <- as.data.frame(y)
+  return(y)
+}))
+
+names(M) <- paste(names(U[,4:6]),"date",sep="_")
+
+Full <- cbind(U, M)
+
+Full$prop4 <- Full$Quarter.y_date-Full$Quarter.x_date
+
+Full$prop5 <- Full$Quarter_date-Full$Quarter.y_date
+
+Prop4 <- 4*max(Full$prop4)
+Prop5 <- 4*max(Full$prop5)
+
+```
+
+
+### [Assumptions]
+
+
+```{r, eval=T, include=F}
+
+kendall.tau(Train_set$SalesGrowth.x, Train_set$SalesGrowth.y)
+
+BiCopIndTest(Train_set$SalesGrowth.x,Train_set$SalesGrowth.y)
+
+```
+
+
+# [Results]
+
+
+```{r, eval=T}
+
+py_set_seed(2)
+
+l <- list("bb1","bb6","bb7","bb8","clayton","frank","gaussian","gumbel","indep","joe","t","tll")
+
+sk <- import("sklearn.preprocessing", convert = FALSE)
+# Создаем копию данных, уже переведенную в uniform
+Train_trans <- Train
+Train_trans[,1:2] <- py_to_r(sk$QuantileTransformer(output_distribution='uniform')$fit_transform(Train[,1:2]))
+
+
+M_R2 <- lapply(l, function(x){
+  
+  cop <- list(type = c("Regression","Classification"),
+              library = "rvinecopulib",
+              loop = NULL) 
+
+prm <- data.frame(parameter="family_set",
+                  class = "string",
+                  label = "Families")
+
+cop$parameters <- prm
+
+# give families of a copulas
+
+copgrid <- data.frame(c(x)) 
+names(copgrid) <- 'family_set'
+
+cop$grid <- copgrid
+
+# fitting parameters
+
+copFit <- function(x,y, data, var_types, par_method, nonpar_method, selcrit, psi0, wts, param, lev, last, classProbs) {
+    
+  bicop(data = x, var_types = c("c", "c"),
+        family_set = param$family_set, 
+        par_method = "mle", 
+        nonpar_method = "quadratic",
+        selcrit = "aic", 
+        psi0 = 0.95)
+}
+ 
+cop$fit <- copFit
+
+# predicting parameters
+
+copPred <- function(modelFit,newdata, preProc=NULL, submodels = NULL) {
+  
+  newdata1 <- a$QuantileTransformer(output_distribution='uniform', n_quantiles=nrow(newdata))$fit_transform(newdata[,1:2])
+  newdata1 <- as.matrix(newdata1)
+  
+  y <- cbind(predict(object=modelFit, newdata1, what="hfunc2"), predict(object=modelFit, newdata1, what="hfunc1"))
+  
+  z <- a$QuantileTransformer(output_distribution='uniform', n_quantiles=nrow(y))$fit(newdata[,1:2])$inverse_transform(y)
+  z <- as.matrix(z)
+  return(z[,2])
+  
+}
+
+cop$predict <- copPred
+
+# probabilities
+
+copProb <- function(modelFit, newdata, preProc=NULL, submodels = NULL) {
+  
+ newdata1 <- a$QuantileTransformer(output_distribution='uniform', n_quantiles=nrow(newdata))$fit_transform(newdata[,1:2])
+ newdata1 <- as.matrix(newdata1)
+  
+  y <- predict(object=modelFit, newdata1, what="hfunc1", type="probabilities")
+  return(y)
+  
+}
+  
+cop$prob <- copProb
+
+
+# Rsquared function
+
+f1 <- function(data, lev = NULL, model = NULL) {
+  # Принудительно преобразуем в числовой формат
+  obs <- as.numeric(data$obs)
+  pred <- as.numeric(data$pred)
+  
+  # Рассчитываем базовые компоненты
+  ss_res <- sum((obs - pred)^2)
+  ss_tot <- sum((obs - mean(obs))^2)
+  
+  # Избегаем деления на ноль
+  if (ss_tot == 0) {
+    r2 <- 0
+  } else {
+    r2 <- 1 - (ss_res / ss_tot)
+  }
+  
+  c(Metric = r2)
+}
+
+
+set.seed(2)
+
+fitControl <- trainControl(method = "timeslice", initialWindow = 150,horizon = 50,fixedWindow = F, verboseIter = T, savePredictions = T, summaryFunction = f1, returnResamp = "all")
+  
+set.seed(2)
+Model_traditional <- train(x=Train_trans[,1:2],y=Train_trans[,3],
+                   data=Train_trans,
+                   method = cop,
+                   trControl = fitControl,
+                   tuneGrid = copgrid, 
+                   metric="Metric")
+
+return(Model_traditional)
+  
+})
+
+```
+
+
+```{r}
+
+p <- lapply(M, function(x) {
+  cbind(x$results, AIC(x$finalModel), BIC(x$finalModel), logLik(x$finalModel), paste0(x$finalModel[2]))
+})
+
+t <- data.frame(matrix(unlist(p), nrow=length(l), byrow=T))
+
+names(t) <- names(p[[1]])
+
+```
+
+
+*`r table_nums("models")`*
+
+```{r results, echo=FALSE, fig.cap=table_nums("models"), message=FALSE, warning=FALSE, eval=T}
+
+t[,-1] <- lapply(t[,-1], function(x) {
+  x <- as.numeric(x)
+  x <- round(x, digits=3)
+})
+
+t[,-1] <- round(t[,-1],digits=3)
+
+t$Copula <- c("Clayton-Gumbel","Джо-Gumbel","Joe-Clayton","Joe-Frank","Clayton","Frank","Gaussian","Gumbel","Independence","Joe","t-copula","nonparametric copula")
+
+setnames(t,"AIC(x$finalModel)","AIC")
+setnames(t,"BIC(x$finalModel)","BIC")
+setnames(t,"logLik(x$finalModel)","LogLikelihood")
+setnames(t,"paste0(x$finalModel[2])","rotation")
+setnames(t, "Copula","Moled")
+setnames(t, "rotation","Angle")
+
+t1 <- t %>% ungroup() %>% dplyr::select('Model', 'Angle', 'AIC', 'BIC', 'LogLikelihood')
+
+f <- flextable(t1)
+
+f <- flextable::font(f, fontname = "Times New Roman",part = "all")
+f <- flextable::fontsize(f, size=11,part = "all")
+f <- bold(f, bold = TRUE, part = "header")
+f <- bold(f, j = 1, bold = TRUE, part = "body")
+
+f <- flextable::footnote(f, i = 12, j = "Model", value = as_paragraph(c("estimated with nonparametric transformation kernel")),ref_symbols = c("b"))
+
+f <- autofit(f)
+
+f
+
+ch_cap <- table_nums("model")
+
+```
+
+<br/><br/>
+
+*`r table_nums("metrics")`*
+
+```{r metrics, echo=FALSE, fig.cap=table_nums("metrics"), message=FALSE, warning=FALSE, eval=T}
+
+t2 <- t %>% ungroup() %>% dplyr::select('Model', 'Angle', 'RMSE', 'RMSESD', 'Rsquared', 'RsquaredSD', 'MAE', 'MAESD')
+
+
+f <- flextable(t2)
+
+f <- flextable::font(f, fontname = "Times New Roman",part = "all")
+f <- flextable::fontsize(f, size=11,part = "all")
+f <- bold(f, bold = TRUE, part = "header")
+f <- bold(f, j = 1, bold = TRUE, part = "body")
+
+f <- flextable::footnote(f, i = 12, j = "Model", value = as_paragraph(c("estimated with nonparametric transformation kernel")),ref_symbols = c("b"))
+
+f <- flextable::compose(f, part="header",j="RMSESD",value=as_paragraph(as_b("\U03C3"),as_sub("RMSE")))
+f <- flextable::compose(f, part="header",j="RsquaredSD",value=as_paragraph(as_b("\U03C3(R"),as_sup("2"),")"))
+f <- flextable::compose(f, part="header",j="MAESD",value=as_paragraph(as_b("\U03C3"),as_sub("MAE")))
+f <- flextable::compose(f, part="header",j="Rsquared",value=as_paragraph(as_b("R"),as_sup("2")))
+
+f <- width(f, j = 1, width = 2.1)
+f <- width(f, j = 2, width = 1.2)
+f <- width(f, j = 3, width = 0.6)
+f <- width(f, j = 4, width = 0.6)
+f <- width(f, j = 5, width = 0.5)
+f <- width(f, j = 6, width = 0.5)
+f <- width(f, j = 7, width = 0.6)
+f <- width(f, j = 8, width = 0.5)
+
+f
+
+ch_cap <- table_nums("metrics")
+
+```
+
+```{r}
+setnames(t, "Модель копулы","copula")
+```
+
+
+```{r comparison, eval=T, fig.width = 7.7, fig.height = 5.5, fig.cap=comp_cop}
+
+ggplot(t, aes(x=Rsquared, y=LogLikelihood, size=RMSE, color=AIC, label=copula)) +
+  geom_point(alpha=0.6, pch=16)+
+  labs(x=expression(R^2), y="LogLikelihood", size="RMSE")+
+  geom_hline(yintercept=0)+
+  theme(plot.caption=element_text(size=9, hjust=0, margin=margin(t=30)), axis.title=element_text(size=10,face = "bold"),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black"), legend.background = element_blank(),legend.key = element_rect(colour = "transparent", fill = "white"))+ geom_label_repel(size=3, color="black")
+
+
+comp_cop <- figure_nums("model_comparison")
+
+```
+
+
+```{r, eval=F}
+
+# run for model details
+
+h <- list(type = c("Regression","Classification"),
+              library = "rvinecopulib",
+              loop = NULL) 
+
+prm <- data.frame(parameter=c("theta","delta"),
+                  class = c("c","c"),
+                  label = c("theta","delta"))
+
+h$parameters <- prm
+
+# create grid
+
+hgrid <- expand.grid(theta=seq(1,6,0.01),delta = seq(0,6,0.01))
+names(hgrid) <- c('theta','delta')
+h$grid <- hgrid
+
+# fitting parameters
+
+hFit <- function(x,y,data, cond_var, family, rotation, parameters, inverse, var_types, wts, param, lev, last, classProbs) {
+
+bicop_dist(family="bb7",
+       rotation = 180,
+       parameters=c(param$theta,param$delta), 
+       var_types = c("c","c")
+       )
+}
+ 
+h$fit <- hFit
+
+# predicting parameters
+
+hPred <- function(modelFit, newdata, cond_var, family, rotation, parameters, inverse, var_types, preProc=NULL, submodels = NULL,param) {
+
+  newdata1 <- a$QuantileTransformer(output_distribution='uniform', n_quantiles=nrow(newdata))$fit_transform(newdata[,1:2])
+  newdata1 <- as.matrix(newdata1)
+  
+  # predict values on the base of the copula model
+  y <- cbind(predict(object=modelFit, newdata1, what="hfunc2"), predict(object=modelFit, newdata1, what="hfunc1"))
+  z <- a$QuantileTransformer(output_distribution='uniform', n_quantiles=nrow(y))$fit(newdata[,1:2])$inverse_transform(y)
+  z <- as.matrix(z)
+  return(z[,2])
+
+}
+
+h$predict <- hPred
+
+# probabilities
+
+hProb <- function(modelFit, newdata, preProc=NULL, submodels = NULL,type="probabilities",cond_var, family, rotation, parameters, inverse, var_types,param) {
+ 
+  newdata1 <- a$QuantileTransformer(output_distribution='uniform', n_quantiles=nrow(newdata))$fit_transform(newdata[,1:2])
+  newdata1 <- as.matrix(newdata1)
+  
+  # predict values on the base of the copula model
+  y <- cbind(predict(object=modelFit, newdata1, what="hfunc2", type="probabilities"), predict(object=modelFit, newdata1, what="hfunc1", type="probabilities"))
+  z <- a$QuantileTransformer(output_distribution='uniform', n_quantiles=nrow(y))$fit(newdata[,1:2])$inverse_transform(y)
+  z <- as.matrix(z)
+  return(z[,2]) 
+ 
+}
+  
+h$prob <- hProb
+
+```
+
+
+```{r, include=T, eval=F}
+
+set.seed(2)
+
+fitControl <- trainControl(method = "timeslice", initialWindow = 150,horizon = 50,fixedWindow = F,savePredictions = T, verboseIter = T)
+  
+set.seed(2)
+Joe_Clayton <- train(x=Train[,1:2],y=Train[,3],
+                   data=Train,
+                   method = h,
+                   trControl = fitControl,
+                   tuneGrid = hgrid, 
+                   metric="Rsquared")
+
+summary(Joe_Clayton)
+
+```
+
+```{r save_results, eval=F}
+
+results <- Joe_Clayton$pred
+
+save(results, file = "Results.Rda")
+
+```
+
+
+## [Model testing]
+
+```{r, eval=F}
+
+predicted_test <- cbind(predict(bicop_dist(family="bb7",
+       rotation = 0,
+       parameters=c(1,0), 
+       var_types = c("c","c")
+       ),newdata=Test_set[,1:2],what="hfunc2"),
+       predict(bicop_dist(family="bb7",
+       rotation = 0,
+       parameters=c(1,0), 
+       var_types = c("c","c")
+       ),newdata=Test_set[,1:2],what="hfunc1"))
+
+z <- a$QuantileTransformer(output_distribution='uniform', n_quantiles=nrow(predicted_test))$fit(Test[,1:2])$inverse_transform(predicted_test)
+z <- as.matrix(z)
+
+b <- as.data.frame(cbind(Test$SalesGrowth,z[,2]))
+names(b) <- c("obs","pred")
+
+defaultSummary(b)
+
+```
+
+# [Discussion]
+
+## [Literature]
+
+```{r, include=F, eval=T}
+
+knitr::write_bib(c(.packages(), "bookdown"), "packages.bib")
+
+write.bibtex(file="references.bib")
+
+```
+
